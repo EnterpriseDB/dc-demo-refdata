@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }} &mdash; Refdata Demo{% endblock %}
+{% block content %}
+<h1>{{ job.title }}</h1>
+<p class="subtitle">
+  bulk-mb={{ job.params.bulk_mb }} &middot; workers={{ job.params.workers }}
+  &middot; batch-size={{ job.params.batch_size }} &middot; batches-per-worker={{ job.params.batches_per_worker }}
+</p>
+
+<div class="card">
+  <div class="status-row">
+    <span id="spinner" class="spinner"></span>
+    <span id="stageText" class="stage-text">Starting&hellip;</span>
+    <span id="elapsed" class="elapsed"></span>
+  </div>
+  <div class="progress-track" id="progressTrack" hidden>
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+  <p class="chart-caption" id="progressCaption"></p>
+</div>
+
+<div class="card" id="advisorCard" hidden>
+  <h2>Workflow <code>refdata</code> recommendation: <span id="advisorPill"></span></h2>
+  <p>Based on the access pattern observed during the heap-phase benchmark above.</p>
+  <div class="advisor-stats">
+    <div class="advisor-stat">Rows<strong id="advRows"></strong></div>
+    <div class="advisor-stat">Self DML<strong id="advSelfDml"></strong></div>
+    <div class="advisor-stat">Child FK DML<strong id="advChildDml"></strong></div>
+    <div class="advisor-stat">Benefit ratio<strong id="advRatio"></strong></div>
+    <div class="advisor-stat">
+      <span class="tooltip-label">MultiXact pressure
+        <span class="info-icon" tabindex="0">&#9432;
+          <span class="tooltip-text">
+            Peak share of this table's rows seen with <code>xmax</code> as a live
+            MultiXact during the benchmark &mdash; i.e. multiple transactions concurrently holding a
+            <code>FOR KEY SHARE</code> lock on the same row (what an FK check
+            takes on a heap parent row). High pressure means more vacuum work
+            and, if left unmanaged, risk of MultiXact wraparound. refdata skips
+            the per-row lock entirely, so its rows never accumulate this.
+          </span>
+        </span>
+      </span>
+      <strong id="advMxid"></strong>
+    </div>
+    <div class="advisor-stat">Advisor score<strong id="advScore"></strong></div>
+  </div>
+  <code class="alter-stmt" id="advAlter" hidden></code>
+</div>
+
+<div class="card" id="resultsCard" hidden>
+  <h2>Results</h2>
+  <div class="chart-grid">
+    <div>
+      <canvas id="throughputChart" height="220"></canvas>
+      <p class="chart-caption" id="throughputCaption"></p>
+    </div>
+    <div>
+      <canvas id="contentionChart" height="220"></canvas>
+      <p class="chart-caption" id="contentionCaption"></p>
+    </div>
+  </div>
+  <div class="timeline-chart">
+    <canvas id="mxTimelineChart" height="140"></canvas>
+    <p class="chart-caption" id="mxTimelineCaption"></p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Console output</h2>
+  <pre class="console" id="console">{% for line in job.lines %}{% if not (line.startswith('RESULT_JSON:') or line.startswith('ADVISOR_JSON:') or line.startswith('PROGRESS_JSON:')) %}{{ line }}
+{% endif %}{% endfor %}</pre>
+</div>
+
+<a class="button-link" href="{{ url_for('index') }}">&larr; Back</a>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const jobId = {{ job.id | tojson }};
+const consoleEl = document.getElementById('console');
+const spinnerEl = document.getElementById('spinner');
+const stageEl = document.getElementById('stageText');
+const elapsedEl = document.getElementById('elapsed');
+let seen = {{ job.lines | length }};
+let startedAt = Date.now();
+
+const progressTrackEl = document.getElementById('progressTrack');
+const progressFillEl = document.getElementById('progressFill');
+const progressCaptionEl = document.getElementById('progressCaption');
+
+function humanSize(bytes) {
+  for (const unit of ['B', 'KB', 'MB', 'GB']) {
+    if (Math.abs(bytes) < 1024) return `${bytes.toFixed(1)}${unit}`;
+    bytes /= 1024;
+  }
+  return `${bytes.toFixed(1)}TB`;
+}
+
+function updateProgress(p) {
+  progressTrackEl.hidden = false;
+  progressFillEl.style.width = `${p.pct}%`;
+  progressCaptionEl.textContent =
+    `${p.rows.toLocaleString()} rows loaded — ${humanSize(p.size)} / ${humanSize(p.target)} (${p.pct.toFixed(1)}%)`;
+}
+
+const STAGES = [
+  ['Setting up schema', 'Setting up schema and lookup table…'],
+  ['Bulk loading synthetic', 'Loading sample data…'],
+  ['orders table+indexes now', 'Sample data loaded.'],
+  ['telemetry_events table+indexes now', 'Sample data loaded.'],
+  ['access method: heap', 'Preparing benchmark…'],
+  ['Phase 1 (heap)', 'Running the workload against a plain heap table…'],
+  ['Workflow `refdata` recommendation', 'Scoring the access pattern to see if refdata is a good fit…'],
+  ['Converting', 'Converting the lookup table to refdata…'],
+  ['access method: refdata', 'Converted. Preparing the second run…'],
+  ['Phase 2 (refdata)', 'Running the same workload against refdata…'],
+  ['Before / after', 'Comparing results…'],
+];
+
+function updateStage(lines) {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    for (const [marker, label] of STAGES) {
+      if (lines[i].includes(marker)) {
+        stageEl.textContent = label;
+        return;
+      }
+    }
+  }
+}
+
+function tickElapsed() {
+  const secs = Math.floor((Date.now() - startedAt) / 1000);
+  elapsedEl.textContent = `${secs}s`;
+}
+setInterval(tickElapsed, 1000);
+tickElapsed();
+
+function renderAdvisor(rec) {
+  document.getElementById('advisorCard').hidden = false;
+  const pill = document.getElementById('advisorPill');
+  pill.textContent = rec.recommendation.replace(/_/g, ' ');
+  pill.className = 'rec-pill rec-' + rec.recommendation;
+
+  document.getElementById('advRows').textContent = rec.rows.toLocaleString();
+  document.getElementById('advSelfDml').textContent = rec.self_dml.toLocaleString();
+  document.getElementById('advChildDml').textContent = rec.child_dml.toLocaleString();
+  document.getElementById('advRatio').textContent = rec.benefit_ratio.toLocaleString(undefined, {maximumFractionDigits: 1});
+  document.getElementById('advScore').textContent = rec.score.toLocaleString(undefined, {maximumFractionDigits: 1});
+
+  const mxidEl = document.getElementById('advMxid');
+  mxidEl.innerHTML = '';
+  const mxidPill = document.createElement('span');
+  mxidPill.className = 'mx-pill mx-' + rec.mxid_pressure;
+  mxidPill.textContent = `${rec.mxid_pct.toFixed(1)}% (${rec.mxid_pressure})`;
+  mxidEl.appendChild(mxidPill);
+
+  const alterEl = document.getElementById('advAlter');
+  if (rec.alter_statement) {
+    alterEl.textContent = rec.alter_statement;
+    alterEl.hidden = false;
+  }
+}
+
+function renderCharts(summary) {
+  const heap = summary.heap;
+  const refdata = summary.refdata;
+  document.getElementById('resultsCard').hidden = false;
+
+  new Chart(document.getElementById('throughputChart'), {
+    type: 'bar',
+    data: {
+      labels: ['heap', 'refdata'],
+      datasets: [{
+        label: 'rows/sec',
+        data: [Math.round(heap.rows_per_second), Math.round(refdata.rows_per_second)],
+        backgroundColor: ['#dc2626', '#16a34a'],
+      }],
+    },
+    options: {
+      plugins: { legend: { display: false }, title: { display: true, text: 'Insert throughput (rows/sec)' } },
+      scales: { y: { beginAtZero: true } },
+    },
+  });
+
+  const pct = heap.rows_per_second ? (100 * (refdata.rows_per_second - heap.rows_per_second) / heap.rows_per_second) : 0;
+  document.getElementById('throughputCaption').textContent =
+    `refdata was ${pct >= 0 ? pct.toFixed(1) + '% faster' : Math.abs(pct).toFixed(1) + '% slower'} on this run.`;
+
+  new Chart(document.getElementById('contentionChart'), {
+    type: 'bar',
+    data: {
+      labels: [`Lookup rows w/ a live MultiXact (of ${heap.dim_row_count})`, 'Max concurrent lock-holders on one row'],
+      datasets: [
+        { label: 'heap', data: [heap.rows_with_multixact, heap.max_concurrent_holders_on_one_row], backgroundColor: '#dc2626' },
+        { label: 'refdata', data: [refdata.rows_with_multixact, refdata.max_concurrent_holders_on_one_row], backgroundColor: '#16a34a' },
+      ],
+    },
+    options: {
+      plugins: { title: { display: true, text: 'FK lock contention on the lookup table' } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+    },
+  });
+  document.getElementById('contentionCaption').textContent =
+    'Heap rows accumulate MultiXacts from concurrent FOR KEY SHARE locks; refdata rows never do.';
+
+  const maxRows = Math.max(heap.dim_row_count, refdata.dim_row_count, 1);
+  new Chart(document.getElementById('mxTimelineChart'), {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'heap',
+          data: heap.timeline.map(p => ({x: p.t, y: p.rows_with_multixact})),
+          borderColor: '#dc2626', backgroundColor: '#dc2626',
+          stepped: true, pointRadius: 0, borderWidth: 2,
+        },
+        {
+          label: 'refdata',
+          data: refdata.timeline.map(p => ({x: p.t, y: p.rows_with_multixact})),
+          borderColor: '#16a34a', backgroundColor: '#16a34a',
+          stepped: true, pointRadius: 0, borderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      parsing: false,
+      plugins: { title: { display: true, text: 'Lookup rows carrying a live MultiXact, over time' } },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'seconds into phase' } },
+        y: { beginAtZero: true, max: maxRows, ticks: { stepSize: 1 },
+             title: { display: true, text: `rows (of ${maxRows})` } },
+      },
+    },
+  });
+  document.getElementById('mxTimelineCaption').textContent =
+    'Sampled every 50ms during each phase. Heap climbs as concurrent FK inserts ' +
+    'lock the same lookup rows; refdata stays flat at zero throughout.';
+}
+
+async function poll() {
+  const res = await fetch(`/job/${jobId}/output`);
+  const data = await res.json();
+  if (data.lines.length > seen) {
+    const newLines = data.lines.slice(seen);
+    updateStage(newLines);
+    for (const line of newLines) {
+      if (line.startsWith('RESULT_JSON:')) {
+        renderCharts(JSON.parse(line.slice('RESULT_JSON:'.length)));
+      } else if (line.startsWith('ADVISOR_JSON:')) {
+        renderAdvisor(JSON.parse(line.slice('ADVISOR_JSON:'.length)));
+      } else if (line.startsWith('PROGRESS_JSON:')) {
+        updateProgress(JSON.parse(line.slice('PROGRESS_JSON:'.length)));
+      } else {
+        if (line.includes('table+indexes now') && !progressTrackEl.hidden) {
+          progressTrackEl.hidden = true;
+        }
+        consoleEl.textContent += line + '\n';
+      }
+    }
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+    seen = data.lines.length;
+  }
+  if (data.done) {
+    spinnerEl.className = data.returncode === 0 ? 'spinner done' : 'spinner failed';
+    stageEl.textContent = data.returncode === 0 ? 'Complete' : `Failed (exit ${data.returncode})`;
+  } else {
+    setTimeout(poll, 800);
+  }
+}
+poll();
+</script>
+{% endblock %}

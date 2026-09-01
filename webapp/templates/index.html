@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Refdata Demo{% endblock %}
+{% block content %}
+<h1>Refdata before/after demo</h1>
+<p class="subtitle">
+  Each demo loads ~50MB of synthetic data, runs a concurrent insert workload
+  against a small foreign-key lookup table twice &mdash; once as plain heap,
+  once as <code>refdata</code> &mdash; and reports the difference.
+</p>
+
+{% for key, uc in usecases.items() %}
+<div class="card">
+  <h2>{{ uc.title }}</h2>
+  <p>{{ uc.description }}</p>
+  <form method="post" action="{{ url_for('run', usecase=key) }}">
+    <div class="field">
+      <label for="{{ key }}_bulk_mb">Bulk data (MB)</label>
+      <input type="number" id="{{ key }}_bulk_mb" name="bulk_mb" value="{{ defaults.bulk_mb }}" min="1" max="500">
+    </div>
+    <div class="field">
+      <label for="{{ key }}_workers">Concurrent workers</label>
+      <input type="number" id="{{ key }}_workers" name="workers" value="{{ defaults.workers }}" min="1" max="64">
+    </div>
+    <div class="field">
+      <label for="{{ key }}_batch_size">Rows / batch</label>
+      <input type="number" id="{{ key }}_batch_size" name="batch_size" value="{{ defaults.batch_size }}" min="1" max="5000">
+    </div>
+    <div class="field">
+      <label for="{{ key }}_batches_per_worker">Batches / worker</label>
+      <input type="number" id="{{ key }}_batches_per_worker" name="batches_per_worker" value="{{ defaults.batches_per_worker }}" min="1" max="200">
+    </div>
+    {% if key in running_by_usecase %}
+      <a class="button-link" href="{{ url_for('job_view', job_id=running_by_usecase[key]) }}">View running job &rarr;</a>
+    {% else %}
+      <button type="submit">Run demo</button>
+    {% endif %}
+  </form>
+</div>
+{% endfor %}
+
+{% if recent %}
+<div class="card">
+  <h2>Recent runs</h2>
+  <table class="recent">
+    <thead><tr><th>Use case</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for job in recent %}
+      <tr>
+        <td>{{ job.title }}</td>
+        <td>
+          {% if not job.done %}<span class="badge badge-running">running</span>
+          {% elif job.returncode == 0 %}<span class="badge badge-done">done</span>
+          {% else %}<span class="badge badge-failed">failed</span>{% endif %}
+        </td>
+        <td><a href="{{ url_for('job_view', job_id=job.id) }}">view &rarr;</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
