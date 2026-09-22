@@ -50,15 +50,11 @@ python3 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
 ```
 
-Create `connection.pg` in the repo root -- a single line containing a
-`postgres://` connection URI, e.g.:
+Set `A1P_DATABASE_URL` to a `postgres://` connection URI, e.g.:
 
+```bash
+export A1P_DATABASE_URL="postgres://user:password@host:port/dbname?sslmode=require"
 ```
-postgres://user:password@host:port/dbname?sslmode=require
-```
-
-This file is gitignored (it holds a live password) and must be
-created locally; it isn't included in the repo.
 
 ## Running a demo from the CLI
 

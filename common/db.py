@@ -1,12 +1,15 @@
-import pathlib
+import os
 
 import psycopg
 
-_DSN_PATH = pathlib.Path(__file__).resolve().parent.parent / "connection.pg"
+_DSN_ENV_VAR = "A1P_DATABASE_URL"
 
 
 def get_dsn() -> str:
-    return _DSN_PATH.read_text().strip()
+    dsn = os.environ.get(_DSN_ENV_VAR)
+    if not dsn:
+        raise RuntimeError(f"{_DSN_ENV_VAR} is not set")
+    return dsn
 
 
 def connect(application_name: str = "refdata_demo", autocommit: bool = False):
