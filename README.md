@@ -118,13 +118,3 @@ page shows:
   contention that already got overwritten by a later, uncontended
   lock. Under `heap` this is reliably non-zero; under `refdata` it's
   always zero, because the per-row lock is never taken at all.
-
-## Notes
-
-- `input.html` is the original standalone product-demo mockup
-  (canvas animations, a slider-driven advisor simulator) and isn't
-  part of this repo -- it's a separate, static artifact.
-- There's no real `refdata_advisor` extension installed on the target
-  server; `common/advisor.py` is a Python port of the scoring model
-  shown in that mockup, fed with numbers actually measured by the
-  benchmark rather than slider values.
