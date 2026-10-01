@@ -5,6 +5,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 
+from psycopg import sql
+
 from . import db
 
 
@@ -116,7 +118,9 @@ def _multixact_snapshot_cur(cur, dim_qualified_name: str):
     """Returns (rows_with_live_multixact, max_concurrent_holders_on_one_row)
     for the dimension table's on-disk state right now."""
 
-    cur.execute(f"select public.refdata_demo_xmax_members(xmax) from {dim_qualified_name}")
+    cur.execute(
+        sql.SQL("select public.refdata_demo_xmax_members(xmax) from {}").format(db.ident(dim_qualified_name))
+    )
     counts = [r[0] for r in cur.fetchall()]
     rows_with_multixact = sum(1 for c in counts if c > 1)
     max_members = max(counts) if counts else 0
@@ -206,7 +210,7 @@ def run_phase(label: str, dim_qualified_name: str, worker_fn, n_workers: int) ->
     fact table, and return the number of rows it inserted."""
 
     with db.connect(autocommit=True) as conn, conn.cursor() as cur:
-        cur.execute(f"select count(*) from {dim_qualified_name}")
+        cur.execute(sql.SQL("select count(*) from {}").format(db.ident(dim_qualified_name)))
         dim_row_count = cur.fetchone()[0]
 
     sampler = MultixactSampler(dim_qualified_name)
