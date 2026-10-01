@@ -10,6 +10,8 @@ COPY webapp ./webapp
 COPY usecase1_order_status ./usecase1_order_status
 COPY usecase3_device_telemetry ./usecase3_device_telemetry
 
+# Bind to all interfaces: required for the NorthFlank sandbox. The UI is
+# unauthenticated, so only run this in an isolated sandbox (see README).
 ENV HOST=0.0.0.0 \
     PORT=5050
 

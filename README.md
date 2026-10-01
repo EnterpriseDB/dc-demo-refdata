@@ -102,6 +102,16 @@ page shows:
   over the course of each phase
 - The full console output of the underlying script
 
+### Container / NorthFlank
+
+The container image binds to `0.0.0.0` (via `HOST` in the Dockerfile),
+which the NorthFlank sandbox requires so its proxy can reach the app.
+The web UI has **no authentication** and can launch destructive,
+resource-intensive jobs (it drops and recreates tables and bulk-loads
+data). Only run the container in an isolated sandbox with a throwaway
+database, and don't expose it publicly outside an authenticating proxy.
+Running `webapp/app.py` directly binds to `127.0.0.1` by default.
+
 ## Reading the results
 
 - **Throughput (rows/sec)** -- should typically be a few percent
