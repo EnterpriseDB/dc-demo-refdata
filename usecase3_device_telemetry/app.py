@@ -13,12 +13,16 @@ import string
 import sys
 from pathlib import Path
 
+from psycopg import sql
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from common import advisor, bench, db
 
 DIM = "public.demo3_device_type"
 FACT = "public.demo3_telemetry_events"
+DIM_ID = db.ident(DIM)
+FACT_ID = db.ident(FACT)
 APP_NAME = "refdata_demo_telemetry_bench"
 
 DEVICE_TYPES = [
@@ -51,30 +55,30 @@ def setup_schema():
     with db.connect(autocommit=True) as conn, conn.cursor() as cur:
         cur.execute("create extension if not exists refdata")
         bench.ensure_multixact_helper(cur)
-        cur.execute(f"drop table if exists {FACT} cascade")
-        cur.execute(f"drop table if exists {DIM} cascade")
-        cur.execute(f"""
-            create table {DIM} (
+        cur.execute(sql.SQL("drop table if exists {} cascade").format(FACT_ID))
+        cur.execute(sql.SQL("drop table if exists {} cascade").format(DIM_ID))
+        cur.execute(sql.SQL("""
+            create table {dim} (
                 id smallint primary key,
                 name text not null,
                 category text not null
             )
-        """)
+        """).format(dim=DIM_ID, fact=FACT_ID))
         cur.executemany(
-            f"insert into {DIM} (id, name, category) values (%s, %s, %s)",
+            sql.SQL("insert into {} (id, name, category) values (%s, %s, %s)").format(DIM_ID),
             DEVICE_TYPES,
         )
-        cur.execute(f"""
-            create table {FACT} (
+        cur.execute(sql.SQL("""
+            create table {fact} (
                 id bigserial primary key,
-                device_type_id smallint not null references {DIM}(id),
+                device_type_id smallint not null references {dim}(id),
                 sensor_id integer not null,
                 reading numeric(10,4) not null,
                 recorded_at timestamptz not null default now(),
                 payload text not null
             )
-        """)
-        cur.execute(f"create index on {FACT} (device_type_id)")
+        """).format(dim=DIM_ID, fact=FACT_ID))
+        cur.execute(sql.SQL("create index on {} (device_type_id)").format(FACT_ID))
 
 
 def bulk_load(target_bytes: int):
@@ -82,7 +86,7 @@ def bulk_load(target_bytes: int):
 
     def copy_batch(cur, n):
         with cur.copy(
-            f"copy {FACT} (device_type_id, sensor_id, reading, payload) from stdin"
+            sql.SQL("copy {} (device_type_id, sensor_id, reading, payload) from stdin").format(FACT_ID)
         ) as cp:
             for _ in range(n):
                 cp.write_row((
@@ -115,11 +119,9 @@ def make_worker(batch_size: int, batches_per_worker: int, seed_offset: int):
                             round(rng.uniform(-40, 140), 4),
                             random_payload(rng),
                         ])
-                    sql = (
-                        f"insert into {FACT} (device_type_id, sensor_id, reading, payload) "
-                        f"values {','.join(placeholders)}"
-                    )
-                    cur.execute(sql, params)
+                    query = sql.SQL("insert into {} (device_type_id, sensor_id, reading, payload) values {}").format(
+                        FACT_ID, sql.SQL(",".join(placeholders)))
+                    cur.execute(query, params)
                     conn.commit()
                     rows_done += batch_size
         return rows_done
@@ -128,18 +130,20 @@ def make_worker(batch_size: int, batches_per_worker: int, seed_offset: int):
 
 def current_max_id() -> int:
     with db.connect(autocommit=True) as conn, conn.cursor() as cur:
-        cur.execute(f"select coalesce(max(id), 0) from {FACT}")
+        cur.execute(sql.SQL("select coalesce(max(id), 0) from {}").format(FACT_ID))
         return cur.fetchone()[0]
 
 
 def delete_above(watermark: int):
     with db.connect(autocommit=True) as conn, conn.cursor() as cur:
-        cur.execute(f"delete from {FACT} where id > %s", (watermark,))
+        cur.execute(sql.SQL("delete from {} where id > %s").format(FACT_ID), (watermark,))
 
 
 def set_access_method(am: str):
     with db.connect(autocommit=True) as conn, conn.cursor() as cur:
-        cur.execute(f"alter table {DIM} set access method {am}")
+        cur.execute(
+            sql.SQL("alter table {} set access method {}").format(DIM_ID, sql.Identifier(am))
+        )
 
 
 def main():

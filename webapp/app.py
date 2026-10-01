@@ -40,6 +40,17 @@ DEFAULTS = {
     "batches_per_worker": 10,
 }
 
+# Server-side bounds; mirror the min/max on the HTML form inputs.
+LIMITS = {
+    "bulk_mb": (1, 500),
+    "workers": (1, 64),
+    "batch_size": (1, 5000),
+    "batches_per_worker": (1, 200),
+}
+
+MAX_JOBS = 50
+MAX_LINES_PER_JOB = 5000
+
 jobs = {}
 jobs_lock = threading.Lock()
 running_by_usecase = {}
@@ -58,7 +69,11 @@ def run_job(job_id: str, usecase: str, script: Path, args: list[str]):
     )
     for line in proc.stdout:
         with jobs_lock:
-            jobs[job_id]["lines"].append(line.rstrip("\n"))
+            lines = jobs[job_id]["lines"]
+            if len(lines) < MAX_LINES_PER_JOB:
+                lines.append(line.rstrip("\n"))
+            elif len(lines) == MAX_LINES_PER_JOB:
+                lines.append("... output truncated ...")
     proc.wait()
     with jobs_lock:
         jobs[job_id]["done"] = True
@@ -95,6 +110,8 @@ def run(usecase):
             params[key] = int(request.form.get(key, default))
         except ValueError:
             params[key] = default
+        low, high = LIMITS[key]
+        params[key] = max(low, min(high, params[key]))
 
     args = [
         "--bulk-mb", str(params["bulk_mb"]),
@@ -116,6 +133,11 @@ def run(usecase):
             "started_at": time.time(),
         }
         running_by_usecase[usecase] = job_id
+        finished = sorted(
+            (j for j in jobs.values() if j["done"]), key=lambda j: j["started_at"]
+        )
+        for old in finished[: max(0, len(jobs) - MAX_JOBS)]:
+            del jobs[old["id"]]
 
     thread = threading.Thread(
         target=run_job, args=(job_id, usecase, USECASES[usecase]["script"], args), daemon=True,
@@ -147,8 +169,8 @@ def job_output(job_id):
 
 
 if __name__ == "__main__":
-    app.run(
-        host=os.environ.get("HOST", "127.0.0.1"),
-        port=int(os.environ.get("PORT", 5050)),
-        debug=os.environ.get("FLASK_DEBUG") == "1",
-    )
+    host = os.environ.get("HOST", "127.0.0.1")
+    # The Werkzeug debugger allows arbitrary code execution, so only allow
+    # it when bound to loopback.
+    debug = os.environ.get("FLASK_DEBUG") == "1" and host in ("127.0.0.1", "localhost", "::1")
+    app.run(host=host, port=int(os.environ.get("PORT", 5050)), debug=debug)
