@@ -169,8 +169,8 @@ def job_output(job_id):
 
 
 if __name__ == "__main__":
-    app.run(
-        host=os.environ.get("HOST", "127.0.0.1"),
-        port=int(os.environ.get("PORT", 5050)),
-        debug=os.environ.get("FLASK_DEBUG") == "1",
-    )
+    host = os.environ.get("HOST", "127.0.0.1")
+    # The Werkzeug debugger allows arbitrary code execution, so only allow
+    # it when bound to loopback.
+    debug = os.environ.get("FLASK_DEBUG") == "1" and host in ("127.0.0.1", "localhost", "::1")
+    app.run(host=host, port=int(os.environ.get("PORT", 5050)), debug=debug)
