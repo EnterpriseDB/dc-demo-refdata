@@ -15,6 +15,10 @@ COPY usecase3_device_telemetry ./usecase3_device_telemetry
 ENV HOST=0.0.0.0 \
     PORT=5050
 
+# psycopg-binary bundles its own OpenSSL, whose default CA path is not Debian's,
+# so sslrootcert=system finds no roots. Point it at the system bundle.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
 RUN useradd --system --no-create-home app
 USER app
 
