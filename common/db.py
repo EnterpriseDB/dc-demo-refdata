@@ -3,7 +3,7 @@ import os
 import psycopg
 from psycopg import sql
 
-_DSN_ENV_VAR = "A1P_DATABASE_URL"
+_DSN_ENV_VAR = "DB_EXTERNAL_DSN"
 
 
 def get_dsn() -> str:
@@ -15,7 +15,9 @@ def get_dsn() -> str:
 
 def connect(application_name: str = "refdata_demo", autocommit: bool = False):
     dsn = get_dsn()
-    return psycopg.connect(dsn, application_name=application_name, autocommit=autocommit)
+    return psycopg.connect(
+        dsn, application_name=application_name, autocommit=autocommit
+    )
 
 
 def ident(qualified_name: str) -> sql.Identifier:
