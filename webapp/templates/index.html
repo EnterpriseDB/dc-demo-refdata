@@ -1,18 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Refdata Demo{% endblock %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>Refdata before/after demo</h1>
-<p class="subtitle">
-  Each demo loads ~50MB of synthetic data, runs a concurrent insert workload
-  against a small foreign-key lookup table twice &mdash; once as plain heap,
-  once as <code>refdata</code> &mdash; and reports the difference.
-</p>
+<div class="card demo-card">
+  <h1 class="with-icon">{{ icon('database', 30) }}Refdata before/after demo</h1>
+  <p class="subtitle">
+    Each demo loads ~50MB of synthetic data, runs a concurrent insert workload
+    against a small foreign-key lookup table twice &mdash; once as plain heap,
+    once as <code>refdata</code> &mdash; and reports the difference.
+  </p>
+<div class="segmented" role="tablist" aria-label="Choose a demo" style="--n: {{ usecases | length }}; --i: 0">
+  {% for key, uc in usecases.items() %}
+  <button type="button" role="tab" id="tab-{{ key }}" aria-controls="panel-{{ key }}"
+          aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ 0 if loop.first else -1 }}">{{ icon(uc.icon) }}{{ uc.label }}</button>
+  {% endfor %}
+</div>
 
 {% for key, uc in usecases.items() %}
-<div class="card">
-  <h2>{{ uc.title }}</h2>
-  <p>{{ uc.description }}</p>
+<div class="demo-panel" role="tabpanel" id="panel-{{ key }}" aria-labelledby="tab-{{ key }}" {% if not loop.first %}hidden{% endif %}>
+  <div class="demo-intro">
+    <p class="eyebrow">Scenario</p>
+    <h2>{{ uc.title }}</h2>
+    <p>{{ uc.description }}</p>
+  </div>
   <form method="post" action="{{ url_for('run', usecase=key) }}">
+    <div class="fields">
     <div class="field">
       <label for="{{ key }}_bulk_mb">Bulk data (MB)</label>
       <input type="number" id="{{ key }}_bulk_mb" name="bulk_mb" value="{{ defaults.bulk_mb }}" min="1" max="500">
@@ -29,34 +41,78 @@
       <label for="{{ key }}_batches_per_worker">Batches / worker</label>
       <input type="number" id="{{ key }}_batches_per_worker" name="batches_per_worker" value="{{ defaults.batches_per_worker }}" min="1" max="200">
     </div>
+    </div>
     {% if key in running_by_usecase %}
-      <a class="button-link" href="{{ url_for('job_view', job_id=running_by_usecase[key]) }}">View running job &rarr;</a>
+      <a class="button-link" href="{{ url_for('job_view', job_id=running_by_usecase[key]) }}">View running job{{ icon('arrow-right') }}</a>
     {% else %}
-      <button type="submit">Run demo</button>
+      <button type="submit">{{ icon('play') }}Run demo</button>
     {% endif %}
   </form>
 </div>
 {% endfor %}
+</div>
 
 {% if recent %}
 <div class="card">
-  <h2>Recent runs</h2>
+  <h2 class="with-icon">{{ icon('history', 22) }}Recent runs</h2>
   <table class="recent">
-    <thead><tr><th>Use case</th><th>Status</th><th></th></tr></thead>
+    <colgroup>
+      <col class="c-case"><col class="c-num c-opt"><col class="c-num"><col class="c-num c-opt">
+      <col class="c-status"><col class="c-view">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Use case</th>
+        <th class="num c-opt" title="Benefit ratio">Benefit</th><th class="num">MultiXact</th><th class="num c-opt">Score</th>
+        <th>Status</th><th></th>
+      </tr>
+    </thead>
     <tbody>
     {% for job in recent %}
+      {% set adv = job.advisor %}
       <tr>
-        <td>{{ job.title }}</td>
+        <td class="case-cell" title="{{ job.title }}">{{ icon(usecases[job.usecase].icon, 15) }}{{ job.title }}</td>
+        {% if adv %}
+          <td class="num c-opt">{{ '{:,.0f}'.format(adv.benefit_ratio) }}</td>
+          <td class="num mx-{{ adv.mxid_pressure }}" title="{{ adv.mxid_pressure }}">{{ '%.1f' % adv.mxid_pct }}%</td>
+          <td class="num c-opt">{{ '{:,.0f}'.format(adv.score) }}</td>
+        {% else %}
+          <td class="num muted c-opt">&mdash;</td><td class="num muted">&mdash;</td><td class="num muted c-opt">&mdash;</td>
+        {% endif %}
         <td>
           {% if not job.done %}<span class="badge badge-running">running</span>
           {% elif job.returncode == 0 %}<span class="badge badge-done">done</span>
           {% else %}<span class="badge badge-failed">failed</span>{% endif %}
         </td>
-        <td><a href="{{ url_for('job_view', job_id=job.id) }}">view &rarr;</a></td>
+        <td class="view-cell"><a class="row-link" href="{{ url_for('job_view', job_id=job.id) }}" aria-label="View {{ job.title }} run">view{{ icon('arrow-right', 14) }}</a></td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
 {% endif %}
+
+<script>
+// Visual swap only: one demo card visible at a time.
+const tabs = [...document.querySelectorAll('.segmented [role="tab"]')];
+function select(tab) {
+  tab.parentElement.style.setProperty('--i', tabs.indexOf(tab));
+  for (const t of tabs) {
+    const on = t === tab;
+    t.setAttribute('aria-selected', on);
+    t.tabIndex = on ? 0 : -1;
+    document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+  }
+}
+tabs.forEach((tab, i) => {
+  tab.addEventListener('click', () => select(tab));
+  tab.addEventListener('keydown', e => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    const next = tabs[(i + step + tabs.length) % tabs.length];
+    select(next);
+    next.focus();
+  });
+});
+</script>
 {% endblock %}

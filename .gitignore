@@ -5,3 +5,4 @@ __pycache__/
 connection.pg
 .claude/
 input.html
+dev/
