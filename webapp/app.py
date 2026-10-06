@@ -2,6 +2,7 @@
 (usecase1_order_status, usecase3_device_telemetry) as subprocesses and
 streams their console output to the browser.
 """
+import json
 import os
 import subprocess
 import sys
@@ -16,6 +17,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 USECASES = {
     "usecase1": {
+        "label": "Order status",
+        "icon": "shopping-cart",
         "title": "Order status under checkout load",
         "description": (
             "Synthetic e-commerce orders referencing a tiny order_status "
@@ -24,6 +27,8 @@ USECASES = {
         "script": ROOT / "usecase1_order_status" / "app.py",
     },
     "usecase3": {
+        "label": "Device telemetry",
+        "icon": "cpu",
         "title": "Device type under IoT ingest load",
         "description": (
             "Synthetic telemetry events referencing a tiny device_type "
@@ -78,7 +83,16 @@ def run_job(job_id: str, usecase: str, script: Path, args: list[str]):
     with jobs_lock:
         jobs[job_id]["done"] = True
         jobs[job_id]["returncode"] = proc.returncode
+        jobs[job_id]["finished_at"] = time.time()
         running_by_usecase.pop(usecase, None)
+
+
+def advisor_summary(job):
+    """Pull the advisor verdict out of a job's ADVISOR_JSON line, if it has one yet."""
+    for line in job["lines"]:
+        if line.startswith("ADVISOR_JSON:"):
+            return json.loads(line[len("ADVISOR_JSON:"):])
+    return None
 
 
 app = Flask(__name__)
@@ -87,7 +101,10 @@ app = Flask(__name__)
 @app.route("/")
 def index():
     with jobs_lock:
-        recent = sorted(jobs.values(), key=lambda j: j["started_at"], reverse=True)[:10]
+        recent = [
+            {**job, "advisor": advisor_summary(job)}
+            for job in sorted(jobs.values(), key=lambda j: j["started_at"], reverse=True)[:10]
+        ]
     return render_template(
         "index.html", usecases=USECASES, defaults=DEFAULTS,
         running_by_usecase=running_by_usecase, recent=recent,
@@ -131,6 +148,7 @@ def run(usecase):
             "done": False,
             "returncode": None,
             "started_at": time.time(),
+            "finished_at": None,
         }
         running_by_usecase[usecase] = job_id
         finished = sorted(
@@ -152,7 +170,7 @@ def job_view(job_id):
         job = jobs.get(job_id)
     if not job:
         return "unknown job", 404
-    return render_template("job.html", job=job)
+    return render_template("job.html", job=job, usecase_icon=USECASES[job["usecase"]]["icon"])
 
 
 @app.route("/job/<job_id>/output")
@@ -165,6 +183,7 @@ def job_output(job_id):
             "lines": job["lines"],
             "done": job["done"],
             "returncode": job["returncode"],
+            "elapsed": (job["finished_at"] or time.time()) - job["started_at"],
         })
 
 

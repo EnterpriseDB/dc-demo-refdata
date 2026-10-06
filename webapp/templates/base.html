@@ -3,16 +3,46 @@
 
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Refdata Demo{% endblock %}</title>
   <style>
+    /* Neumorphic system: one warm surface, depth from paired light/dark shadows.
+       Raised = sits on the surface (cards, buttons). Inset = carved into it (inputs, tracks). */
     :root {
-      --edb-dark: #1A1F36;
-      --edb-blue: #2c3e7b;
-      --edb-accent: #4361ee;
-      --edb-green: #16a34a;
-      --edb-gray: #6b7280;
-      --edb-light-bg: #f5f6fa;
-      --edb-border: #e5e7eb;
+      --surface: #e8e5df;
+      --shade: #c8c3b9;
+      --light: #ffffff;
+      --ink: #34322d;
+      --ink-muted: #625e56;
+      --accent: #c4501e;
+      --accent-hi: #e8703c;
+      --well: #2b2a26;
+      --well-ink: #e9d9c6;
+      --good: #3f7d4e;
+      --bad: #b23b2e;
+
+      --raised: 9px 9px 18px var(--shade), -9px -9px 18px var(--light);
+      --raised-sm: 4px 4px 9px var(--shade), -4px -4px 9px var(--light);
+      --inset: inset 4px 4px 8px var(--shade), inset -4px -4px 8px var(--light);
+      --inset-sm: inset 2px 2px 4px var(--shade), inset -2px -2px 4px var(--light);
+      /* Interaction states: hover = soft warm glow (no lift), press = surface inverts to inset. */
+      --glow: 0 0 16px rgba(232, 112, 60, .28);
+      --glow-strong: 0 0 22px rgba(232, 112, 60, .5);
+      --pressed-dark: inset 3px 3px 7px rgba(0, 0, 0, .35), inset -2px -2px 5px rgba(255, 255, 255, .12);
+      --radius: 22px;
+
+      /* Type scale, ratio 1.2 above body; xs is hand-tuned for uppercase labels. */
+      --t-xs: .72rem;
+      --t-sm: .833rem;
+      --t-md: 1rem;
+      --t-lg: 1.2rem;
+      --t-xl: 1.44rem;
+      --t-2xl: 1.728rem;
+      --t-3xl: 2.488rem;
+
+      --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      /* Letterpress: text stamped into the surface (dark lip top-left, highlight bottom-right). */
+      --engrave: -.5px -.5px 0 rgba(0, 0, 0, .1), 1px 1px 0 rgba(255, 255, 255, .9);
     }
 
     * {
@@ -21,30 +51,66 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background: var(--edb-light-bg);
-      color: #2d3142;
+      background: var(--surface);
+      color: var(--ink);
       margin: 0;
       line-height: 1.5;
     }
 
+    /* 2. Even line breaks: balanced headings, no orphaned last words in prose. */
+    h1,
+    h2 {
+      text-wrap: balance;
+    }
+
+    p,
+    .chart-caption {
+      text-wrap: pretty;
+    }
+
+    code,
+    pre {
+      font-variant-numeric: slashed-zero;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: .88em;
+    }
+
     nav {
-      background: var(--edb-dark);
-      color: #fff;
-      padding: 0 2rem;
-      height: 52px;
+      /* Match the cards: main is 900px with 1rem side padding. */
+      max-width: calc(900px - 2rem);
+      margin: 1.5rem auto 0;
+      padding: 0 1.5rem;
+      height: 60px;
       display: flex;
       align-items: center;
       gap: .5rem;
+      border-radius: 30px;
+      box-shadow: var(--raised);
     }
 
     nav a {
-      color: #fff;
+      color: var(--ink);
       text-decoration: none;
       font-weight: 700;
+      letter-spacing: .01em;
     }
 
-    nav span {
-      color: var(--edb-accent);
+    .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+    }
+
+    .nav-logo {
+      width: auto;
+      color: var(--accent);
+    }
+
+    nav > a:first-child span {
+      color: var(--accent);
     }
 
     .nav-github {
@@ -52,222 +118,739 @@
       display: inline-flex;
       align-items: center;
       gap: .4rem;
-      font-weight: 400;
-      font-size: .85rem;
-      color: rgba(255, 255, 255, .75);
-      transition: color .15s;
+      font-weight: 500;
+      font-size: var(--t-sm);
+      padding: .45rem .9rem;
+      border-radius: 20px;
+      color: var(--ink-muted) !important;
+      box-shadow: var(--raised-sm);
+      transition: box-shadow .15s, color .15s;
     }
 
     .nav-github:hover {
-      color: #fff;
+      color: var(--ink) !important;
+      box-shadow: var(--raised-sm), var(--glow);
+    }
+
+    .nav-github:active {
+      box-shadow: var(--inset-sm);
     }
 
     main {
       max-width: 900px;
       margin: 0 auto;
-      padding: 2rem;
+      padding: 2.25rem 1rem 3rem;
     }
 
     h1 {
-      font-size: 1.5rem;
-      margin-bottom: .25rem;
+      font-size: var(--t-3xl);
+      line-height: 1.15;
+      margin: 0 0 .6rem;
+      letter-spacing: -.02em;
     }
 
     h2 {
-      font-size: 1.1rem;
+      font-size: var(--t-lg);
       margin: 0 0 .5rem;
     }
 
     .subtitle {
-      color: var(--edb-gray);
+      max-width: 62ch;
+      font-size: var(--t-lg);
+      line-height: 1.6;
+      color: var(--ink-muted);
+      margin: 0 0 2.25rem;
+    }
+
+    /* Run settings: raised chips, each ticked green as "selected for this run". */
+    .run-params {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: .75rem;
+      list-style: none;
+      padding: 0;
+      margin: 1.25rem 0 0;
+    }
+
+    @media (max-width: 700px) {
+      .run-params {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 380px) {
+      .run-params {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .run-params li {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      min-width: 0;
+      padding: .55rem .95rem .55rem .6rem;
+      border-radius: 999px;
+      box-shadow: var(--inset);
+      font-size: var(--t-sm);
+    }
+
+    .run-params .param-label {
+      color: var(--ink-muted);
+      text-shadow: var(--engrave);
+    }
+
+    .run-params strong {
+      margin-left: auto;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .check {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .check::after {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 4px;
+      width: 5px;
+      height: 9px;
+      border: solid var(--good);
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+
+    /* Icons: inline SVG sized in px, colored by currentColor. */
+    .icon {
+      flex-shrink: 0;
+      vertical-align: -0.2em;
+    }
+
+    .with-icon {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+    }
+
+    .with-icon > .icon {
+      color: var(--accent);
+    }
+
+    h1.with-icon {
+      gap: .75rem;
+    }
+
+    /* Job title lives inside the status card. */
+    /* Page titles live inside their lead card. */
+    .card > h1 {
+      font-size: var(--t-2xl);
+      margin-bottom: 1.25rem;
+    }
+
+    .card > h1 + .subtitle {
+      margin: -.75rem 0 1.75rem;
+      font-size: var(--t-md);
+    }
+
+    table.recent a {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+    }
+
+    /* Inline note: small, muted, flat light-gray strip with an info icon. */
+    .card p.note,
+    .note {
+      display: flex;
+      align-items: flex-start;
+      gap: .45rem;
+      width: fit-content;
+      max-width: 100%;
+      margin: .9rem auto 0;
+      padding: .5rem .75rem;
+      border-radius: 10px;
+      font-size: var(--t-xs);
+      line-height: 1.5;
+      color: var(--ink-muted);
+      background: color-mix(in srgb, var(--ink-muted) 9%, var(--surface));
+      text-wrap: pretty;
+    }
+
+    .note .icon {
+      margin-top: .05rem;
+      color: var(--ink-muted);
+    }
+
+    /* Demo panel: intro left, 2x2 inputs right, full-width action below.
+       The form uses display: contents so its children join the panel grid. */
+    .demo-panel:not([hidden]) {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto 1fr;
+      column-gap: 2rem;
+    }
+
+    .demo-intro {
+      grid-column: 1;
+      grid-row: 1 / 3;
+    }
+
+    /* The selected scenario sits recessed under the toggle: a different layer from the page header. */
+    .demo-panel:not([hidden]) {
+      padding: 1.5rem;
+      border-radius: 18px;
+      box-shadow: inset 6px 6px 14px var(--shade), inset -6px -6px 14px var(--light);
+    }
+
+    .eyebrow {
+      margin: 0 0 .35rem;
+      font-size: var(--t-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--accent);
+      text-shadow: var(--engrave);
+    }
+
+    .card .eyebrow {
+      color: var(--accent);
+      font-size: var(--t-xs);
+      margin: 0 0 .35rem;
+    }
+
+    .demo-panel form {
+      display: contents;
+    }
+
+    .demo-panel .fields {
+      grid-column: 2;
+      grid-row: 1 / 3;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      align-self: start;
+    }
+
+    /* Bottom-align so a wrapped label never knocks its input out of line. */
+    .demo-panel .field {
+      justify-content: flex-end;
+    }
+
+    .demo-card .demo-panel .field input {
+      width: 100%;
+    }
+
+    .demo-panel form > button,
+    .demo-panel form > a.button-link {
+      grid-column: 1 / -1;
+      margin-top: 1.5rem;
+      width: 100%;
+      text-align: center;
+    }
+
+    @media (max-width: 700px) {
+      .demo-panel:not([hidden]) {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-panel .fields,
+      .demo-intro {
+        grid-column: 1;
+        grid-row: auto;
+      }
+
+      .demo-panel .fields {
+        margin-top: 1.25rem;
+      }
+
+      .demo-panel:not([hidden]) {
+        padding: 1.1rem;
+      }
+    }
+
+    /* Demo card: toggle + active use case, the page's main stage — larger type. */
+    .demo-card .segmented {
+      margin-bottom: 1.75rem;
+    }
+
+    .demo-card .segmented button {
+      font-size: var(--t-md);
+      padding: .75rem 1.4rem;
+    }
+
+    .demo-card h2 {
+      font-size: var(--t-xl);
+      letter-spacing: -.01em;
+      margin-bottom: .4rem;
+    }
+
+    .demo-intro p:not(.eyebrow) {
+      text-wrap: balance;
+      font-size: var(--t-md);
       margin-bottom: 1.5rem;
+    }
+
+    .demo-card .field label {
+      font-size: var(--t-xs);
+    }
+
+    .demo-card .field input {
+      width: 130px;
+      padding: .75rem .95rem;
+      font-size: var(--t-lg);
+    }
+
+    .demo-card button[type="submit"],
+    .demo-card a.button-link {
+      font-size: var(--t-md);
+      padding: .85rem 1.9rem;
     }
 
     .card {
-      background: #fff;
-      border: 1px solid var(--edb-border);
-      border-radius: 8px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--raised);
     }
 
     .card p {
-      color: var(--edb-gray);
-      font-size: .9rem;
-      margin: 0 0 1rem;
+      color: var(--ink-muted);
+      font-size: var(--t-md);
+      margin: 0 0 1.25rem;
+    }
+
+    /* Segmented toggle: inset track with one raised "thumb" key that slides
+       under the selected segment. --n = segment count, --i = selected index. */
+    .segmented {
+      --gap: .35rem;
+      --pad: .4rem;
+      position: relative;
+      display: flex;
+      gap: var(--gap);
+      padding: var(--pad);
+      margin-bottom: 2rem;
+      border-radius: 999px;
+      box-shadow: var(--inset);
+    }
+
+    .segmented::before {
+      content: "";
+      position: absolute;
+      top: var(--pad);
+      bottom: var(--pad);
+      left: var(--pad);
+      width: calc((100% - 2 * var(--pad) - (var(--n) - 1) * var(--gap)) / var(--n));
+      transform: translateX(calc(var(--i) * (100% + var(--gap))));
+      border-radius: 999px;
+      background: var(--surface);
+      box-shadow: var(--raised-sm);
+      transition: transform .35s cubic-bezier(.65, 0, .35, 1), box-shadow .2s;
+    }
+
+    .segmented button {
+      position: relative;
+      z-index: 1;
+      flex: 1 1 0;
+      background: transparent;
+      color: var(--ink-muted);
+      box-shadow: none;
+      border-radius: 999px;
+      padding: .6rem 1.4rem;
+      font-weight: 600;
+      text-shadow: none;
+      transition: color .25s, text-shadow .1s;
+    }
+
+    /* Unselected: hover warms the label to orange; press debosses the text into the surface. */
+    .segmented button:hover {
+      background: transparent;
+      color: var(--accent);
+      box-shadow: none;
+    }
+
+    .segmented button:active {
+      background: transparent;
+      color: var(--accent);
+      box-shadow: none;
+      text-shadow: -1px -1px 0 rgba(0, 0, 0, .22), 1px 1px 0 var(--light);
+    }
+
+    /* Selected segment is see-through; the raised thumb behind it carries the look.
+       Kept neutral so the orange Run button stays the only loud element. */
+    .segmented button[aria-selected="true"],
+    .segmented button[aria-selected="true"]:hover,
+    .segmented button[aria-selected="true"]:active {
+      color: var(--accent);
+      box-shadow: none;
+      text-shadow: none;
+    }
+
+    .segmented:has([aria-selected="true"]:hover)::before {
+      box-shadow: var(--raised-sm), var(--glow);
+    }
+
+    .segmented:has([aria-selected="true"]:active)::before {
+      box-shadow: var(--inset-sm);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .segmented::before {
+        transition: none;
+      }
+    }
+
+    [role="tabpanel"][hidden] {
+      display: none;
     }
 
     form {
       display: flex;
       flex-wrap: wrap;
-      gap: 1rem;
+      gap: 1.25rem;
       align-items: flex-end;
     }
 
     .field {
       display: flex;
       flex-direction: column;
-      gap: .25rem;
+      gap: .4rem;
     }
 
     .field label {
-      font-size: .75rem;
-      color: var(--edb-gray);
+      text-shadow: var(--engrave);
+      font-size: var(--t-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--ink-muted);
+      padding-left: .3rem;
     }
 
     .field input {
-      width: 100px;
-      padding: .4rem .5rem;
-      border: 1px solid var(--edb-border);
-      border-radius: 5px;
-      font-size: .9rem;
+      width: 110px;
+      padding: .6rem .8rem;
+      border: none;
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: var(--t-md);
+      font-variant-numeric: tabular-nums;
+      box-shadow: var(--inset);
     }
 
-    button {
-      background: var(--edb-accent);
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .field input:focus-visible {
+      outline-offset: 1px;
+    }
+
+    /* Primary action: the one colored key on the panel, like the calculator operators. */
+    button,
+    a.button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      text-decoration: none;
+      background: linear-gradient(145deg, var(--accent-hi), var(--accent));
       color: #fff;
       border: none;
-      border-radius: 6px;
-      padding: .55rem 1.25rem;
-      font-size: .9rem;
-      font-weight: 600;
+      border-radius: 999px;
+      padding: .7rem 1.6rem;
+      font-size: var(--t-md);
+      font-weight: 700;
+      letter-spacing: .02em;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, .25);
       cursor: pointer;
+      box-shadow: 6px 6px 14px var(--shade), -6px -6px 14px var(--light);
+      transition: box-shadow .15s, background .15s;
     }
 
-    button:hover {
-      background: #3451d1;
+    button:hover,
+    a.button-link:hover {
+      box-shadow: 6px 6px 14px var(--shade), -6px -6px 14px var(--light), var(--glow-strong);
+    }
+
+    button:active,
+    a.button-link:active {
+      background: linear-gradient(145deg, var(--accent), var(--accent-hi));
+      box-shadow: var(--pressed-dark);
     }
 
     button:disabled {
-      background: #a5b0e8;
+      opacity: .5;
       cursor: not-allowed;
     }
 
-    a.button-link {
-      display: inline-block;
-      text-decoration: none;
-      background: var(--edb-accent);
-      color: #fff;
-      border-radius: 6px;
-      padding: .55rem 1.25rem;
-      font-size: .9rem;
-      font-weight: 600;
+    a.button-link.secondary {
+      background: var(--surface);
+      color: var(--ink);
+      text-shadow: none;
+      box-shadow: var(--raised-sm);
+    }
+
+    a.button-link.secondary:hover {
+      box-shadow: var(--raised-sm), var(--glow);
+    }
+
+    a.button-link.secondary:active {
+      background: var(--surface);
+      box-shadow: var(--inset-sm);
     }
 
     .badge {
       display: inline-block;
-      font-size: .7rem;
+      font-size: var(--t-xs);
       font-weight: 700;
-      padding: .15em .55em;
-      border-radius: 4px;
+      padding: .2em .7em;
+      border-radius: 999px;
       text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    /* Tags tint their background from their own text color. */
+    .badge,
+    .rec-pill,
+    .mx-pill {
+      background: color-mix(in srgb, currentColor 14%, var(--surface));
     }
 
     .badge-running {
-      background: #fef9c3;
-      color: #a16207;
+      color: var(--accent);
     }
 
     .badge-done {
-      background: #dcfce7;
-      color: #15803d;
+      color: var(--good);
     }
 
     .badge-failed {
-      background: #fee2e2;
-      color: #b91c1c;
+      color: var(--bad);
     }
 
+    /* Dark recessed screen, like the calculator display. */
     pre.console {
-      background: #1e1e2e;
-      color: #a6e3a1;
-      padding: 1rem;
-      border-radius: 8px;
-      font-size: .82rem;
-      line-height: 1.5;
+      font-family: var(--mono);
+      background: var(--well);
+      color: var(--well-ink);
+      padding: 1.1rem 1.25rem;
+      margin: 0;
+      border-radius: 16px;
+      font-size: var(--t-sm);
+      line-height: 1.55;
       overflow-x: auto;
       max-height: 60vh;
       overflow-y: auto;
       white-space: pre-wrap;
+      box-shadow: inset 4px 4px 10px rgba(0, 0, 0, .55), 3px 3px 6px var(--light), -1px -1px 3px var(--shade);
     }
 
     table.recent {
       width: 100%;
       border-collapse: collapse;
-      font-size: .85rem;
+      font-size: var(--t-sm);
+    }
+
+    table.recent th {
+      text-shadow: var(--engrave);
+      font-size: var(--t-xs);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--ink-muted);
     }
 
     table.recent th,
     table.recent td {
       text-align: left;
-      padding: .4rem .5rem;
-      border-bottom: 1px solid var(--edb-border);
+      padding: .65rem .5rem;
+      border-bottom: 1px solid var(--shade);
+    }
+
+    /* Fixed layout so long cells truncate with an ellipsis instead of stretching the table. */
+    table.recent {
+      table-layout: fixed;
+    }
+
+    table.recent th,
+    table.recent td {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    table.recent .c-case { width: 46%; }
+    table.recent .c-status { width: 10%; }
+    table.recent .c-num { width: 12%; }
+    table.recent .c-view { width: 8%; }
+
+    table.recent .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.recent .muted {
+      color: var(--ink-muted);
+    }
+
+    /* Icon stays inline (not flex) so the cell can still ellipsis-truncate. */
+    table.recent .case-cell .icon {
+      margin-right: .45rem;
+      vertical-align: -.2em;
+      color: var(--ink-muted);
+    }
+
+    table.recent .view-cell {
+      text-align: right;
+    }
+
+    /* Whole row is clickable: the view link's ::after stretches over the row. */
+    table.recent tbody tr {
+      position: relative;
+      transition: background-color .15s;
+    }
+
+    table.recent .row-link::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+    }
+
+    table.recent tbody tr:nth-child(even) {
+      background: color-mix(in srgb, var(--ink-muted) 5%, var(--surface));
+    }
+
+    table.recent tbody tr:hover {
+      background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    }
+
+    table.recent tbody tr:hover .row-link {
+      color: var(--accent-hi);
+    }
+
+    table.recent .row-link .icon {
+      transition: transform .2s ease;
+    }
+
+    table.recent tbody tr:hover .row-link .icon,
+    table.recent .row-link:focus-visible .icon {
+      transform: translateX(3px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      table.recent .row-link .icon {
+        transition: none;
+      }
+    }
+
+    table.recent tbody tr:has(.row-link:focus-visible) {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+
+    table.recent .row-link:focus-visible {
+      outline: none;
+    }
+
+    @media (max-width: 700px) {
+      table.recent .c-opt {
+        display: none;
+      }
+
+      table.recent .c-case { width: 58%; }
+    }
+
+    table.recent tr:last-child td {
+      border-bottom: none;
+    }
+
+    table.recent a {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
     }
 
     .status-row {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: .75rem;
+      gap: .85rem;
+    }
+
+    .load-meta {
+      margin-left: auto;
+      white-space: nowrap;
+      font-size: var(--t-sm);
+      color: var(--ink-muted);
+      font-variant-numeric: tabular-nums;
     }
 
     .progress-track {
-      margin-top: .9rem;
-      height: 10px;
-      border-radius: 5px;
-      background: var(--edb-light-bg);
-      border: 1px solid var(--edb-border);
+      margin-top: 1.1rem;
+      height: 14px;
+      padding: 3px;
+      border-radius: 999px;
+      box-shadow: var(--inset);
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
       width: 0%;
-      background: var(--edb-accent);
-      border-radius: 5px 0 0 5px;
-      transition: width .3s ease;
+      background: linear-gradient(90deg, var(--accent), var(--accent-hi));
+      border-radius: 999px;
+      transition: width .3s ease, background .4s;
+    }
+
+    .progress-fill.complete {
+      background: linear-gradient(90deg, var(--good), #5a9c69);
     }
 
     .stage-text {
-      font-size: 1rem;
+      font-size: var(--t-md);
       font-weight: 600;
-      color: var(--edb-dark);
     }
 
     .elapsed {
-      margin-left: auto;
-      font-size: .8rem;
-      color: var(--edb-gray);
+      font-size: var(--t-lg);
+      font-weight: 300;
+      padding: .2rem .85rem;
+      border-radius: 999px;
+      color: var(--ink);
       font-variant-numeric: tabular-nums;
+      box-shadow: var(--inset-sm);
     }
 
     .spinner {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
-      border: 3px solid var(--edb-border);
-      border-top-color: var(--edb-accent);
+      border: 3px solid var(--shade);
+      border-top-color: var(--accent);
       animation: spin .8s linear infinite;
       flex-shrink: 0;
     }
 
-    .spinner.done {
-      animation: none;
-      border: none;
-      width: 20px;
-      height: 20px;
-      background: var(--edb-green);
-      -webkit-mask: radial-gradient(circle 9px at center, transparent 6px, black 7px);
-      mask: radial-gradient(circle 9px at center, transparent 6px, black 7px);
-    }
-
+    .spinner.done,
     .spinner.failed {
       animation: none;
       border: none;
       width: 20px;
       height: 20px;
-      background: #dc2626;
+      background: var(--good);
       -webkit-mask: radial-gradient(circle 9px at center, transparent 6px, black 7px);
       mask: radial-gradient(circle 9px at center, transparent 6px, black 7px);
+    }
+
+    .spinner.failed {
+      background: var(--bad);
     }
 
     @keyframes spin {
@@ -276,121 +859,187 @@
       }
     }
 
-    .chart-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-    }
-
-    @media (max-width: 700px) {
-      .chart-grid {
-        grid-template-columns: 1fr;
+    @media (prefers-reduced-motion: reduce) {
+      .spinner {
+        animation-duration: 2.4s;
       }
     }
 
+    .chart-grid {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    /* Fixed height, fluid width: charts stay readable from phone to desktop. */
+    .chart-box {
+      position: relative;
+      height: 240px;
+    }
+
+    .chart-box.tall {
+      height: 300px;
+    }
+
+    .chart-panel {
+      padding: 1rem;
+      border-radius: 16px;
+      box-shadow: var(--inset);
+    }
+
     .chart-caption {
-      font-size: .8rem;
-      color: var(--edb-gray);
+      font-size: var(--t-sm);
+      color: var(--ink-muted);
       text-align: center;
-      margin-top: .5rem;
+      margin: .6rem 0 0;
+    }
+
+    .card p.chart-caption {
+      margin: .6rem 0 0;
     }
 
     .timeline-chart {
-      margin-top: 1.75rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid var(--edb-border);
+      margin-top: 1.5rem;
     }
 
     .advisor-stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       gap: 1rem;
-      margin: 1rem 0;
+      margin: 1.25rem 0;
     }
 
     .advisor-stat {
-      font-size: .8rem;
-      color: var(--edb-gray);
+      font-size: var(--t-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--ink-muted);
+      text-shadow: var(--engrave);
+      padding: 1rem 1.1rem;
+      border-radius: 14px;
+      box-shadow: var(--raised-sm);
     }
 
+    /* 1. Calculator-display numerals: large, thin, fixed-width digits. */
     .advisor-stat strong {
       display: block;
-      font-size: 1.15rem;
-      color: var(--edb-dark);
+      margin-top: .3rem;
+      font-size: var(--t-2xl);
+      font-weight: 300;
+      line-height: 1.1;
+      letter-spacing: -.01em;
+      text-transform: none;
+      text-shadow: none;
+      color: var(--ink);
       font-variant-numeric: tabular-nums;
+    }
+
+    .stat-suffix {
+      margin-left: .4rem;
+      font-size: var(--t-sm);
+      font-weight: 600;
+      letter-spacing: 0;
     }
 
     .rec-pill,
     .mx-pill {
       display: inline-block;
-      padding: .2em .65em;
-      border-radius: 12px;
-      font-size: .78rem;
-      font-weight: 600;
+      padding: .2em .75em;
+      border-radius: 999px;
+      font-size: var(--t-xs);
+      font-weight: 700;
       white-space: nowrap;
     }
 
-    .rec-strongly_recommended {
-      background: #dcfce7;
-      color: #15803d;
+    /* Verdict banner: the recommendation as the card's headline.
+       Color comes from the rec-* class; tint and icon follow currentColor. */
+    .verdict {
+      display: flex;
+      align-items: center;
+      gap: .9rem;
+      margin: .75rem 0 .9rem;
+      padding: .9rem 1.1rem;
+      border-radius: 14px;
+      background: color-mix(in srgb, currentColor 10%, var(--surface));
     }
 
-    .rec-recommended {
-      background: #fef9c3;
-      color: #a16207;
+    .verdict-icon {
+      display: none;
+      line-height: 0;
     }
 
-    .rec-neutral {
-      background: #f3f4f6;
-      color: #6b7280;
+    .rec-strongly_recommended .v-yes,
+    .rec-recommended .v-yes,
+    .rec-already_refdata .v-yes,
+    .rec-neutral .v-neutral,
+    .rec-switch_to_heap .v-no {
+      display: block;
     }
 
-    .rec-switch_to_heap {
-      background: #fee2e2;
-      color: #b91c1c;
+    .verdict-label {
+      display: block;
+      font-size: var(--t-xl);
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -.01em;
     }
 
-    .rec-already_refdata {
-      background: #dbeafe;
-      color: #1d4ed8;
+    .verdict-reason {
+      display: block;
+      margin-top: .15rem;
+      font-size: var(--t-sm);
+      color: var(--ink-muted);
     }
 
-    .mx-none {
-      background: #f3f4f6;
-      color: #6b7280;
+    .rec-strongly_recommended { color: var(--good); }
+    .rec-recommended { color: #8a6412; }
+    .rec-neutral { color: var(--ink-muted); }
+    .rec-switch_to_heap { color: var(--bad); }
+    .rec-already_refdata { color: #2f5d8a; }
+
+    .mx-none { color: var(--ink-muted); }
+    .mx-low { color: #2f5d8a; }
+    .mx-moderate { color: #8a6412; }
+    .mx-high { color: var(--accent); }
+    .mx-critical { color: var(--bad); }
+
+    .advisor-stat strong.mx-none { color: var(--ink-muted); }
+    .advisor-stat strong.mx-low { color: #2f5d8a; }
+    .advisor-stat strong.mx-moderate { color: #8a6412; }
+    .advisor-stat strong.mx-high { color: var(--accent); }
+    .advisor-stat strong.mx-critical { color: var(--bad); }
+
+    @media (max-width: 600px) {
+      .advisor-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
 
-    .mx-low {
-      background: #dbeafe;
-      color: #1d4ed8;
-    }
-
-    .mx-moderate {
-      background: #fef9c3;
-      color: #a16207;
-    }
-
-    .mx-high {
-      background: #fed7aa;
-      color: #c2410c;
-    }
-
-    .mx-critical {
-      background: #fee2e2;
-      color: #b91c1c;
-    }
+    /* Syntax tokens for the dark wells (console + ALTER). */
+    .tok-kw { color: #f08a5a; font-weight: 600; }
+    .tok-id { color: #9fc4a8; }
+    .tok-num { color: #e6c07b; }
+    .tok-delta { color: #e6c07b; font-weight: 600; }
+    .tok-key { color: #9c968b; }
+    .tok-head { color: #fff; font-weight: 700; }
+    .tok-dim { color: #6b665d; }
+    .tok-heap { color: #c9c1b4; font-style: italic; }
+    .tok-refdata { color: #f08a5a; font-weight: 600; }
+    .tok-code { color: #9fc4a8; }
+    .tok-warn { color: #ef7a6a; font-weight: 600; }
 
     .alter-stmt {
-      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-      font-size: .8rem;
-      background: #1e1e2e;
-      color: #a6e3a1;
-      padding: .6em .9em;
-      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: var(--t-sm);
+      background: var(--well);
+      color: var(--well-ink);
+      padding: .75em 1em;
+      border-radius: 12px;
       display: block;
       overflow-x: auto;
       white-space: pre;
       margin-top: .5rem;
+      box-shadow: inset 3px 3px 8px rgba(0, 0, 0, .55);
     }
 
     .tooltip-label {
@@ -402,9 +1051,9 @@
     .info-icon {
       position: relative;
       display: inline-flex;
-      color: var(--edb-gray);
+      color: var(--ink-muted);
       cursor: help;
-      font-size: .95em;
+      font-size: 1.05em;
       line-height: 1;
     }
 
@@ -412,28 +1061,30 @@
       visibility: hidden;
       opacity: 0;
       position: absolute;
-      bottom: 130%;
+      bottom: 140%;
       left: 50%;
       transform: translateX(-50%);
       width: 260px;
-      background: var(--edb-dark);
-      color: #fff;
+      background: var(--well);
+      color: var(--well-ink);
       text-align: left;
-      padding: .65rem .75rem;
-      border-radius: 6px;
-      font-size: .75rem;
+      text-transform: none;
+      letter-spacing: 0;
+      text-shadow: none;
+      padding: .7rem .8rem;
+      border-radius: 12px;
+      font-size: var(--t-xs);
       font-weight: 400;
       line-height: 1.5;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, .2);
+      box-shadow: 6px 6px 16px rgba(0, 0, 0, .25);
       transition: opacity .15s ease;
       z-index: 20;
     }
 
     .info-icon .tooltip-text code {
-      background: rgba(255, 255, 255, .15);
+      background: rgba(255, 255, 255, .12);
       padding: .05em .3em;
-      border-radius: 3px;
-      font-size: .95em;
+      border-radius: 4px;
     }
 
     .info-icon .tooltip-text::after {
@@ -443,7 +1094,7 @@
       left: 50%;
       transform: translateX(-50%);
       border: 5px solid transparent;
-      border-top-color: var(--edb-dark);
+      border-top-color: var(--well);
     }
 
     .info-icon:hover .tooltip-text,
@@ -452,12 +1103,22 @@
       visibility: visible;
       opacity: 1;
     }
+
+    @media (max-width: 600px) {
+      nav {
+        margin: 1rem 1rem 0;
+      }
+
+      .segmented button {
+        padding: .6rem .75rem;
+      }
+    }
   </style>
 </head>
 
 <body>
   <nav>
-    <a href="{{ url_for('index') }}"><span>EDB</span> Refdata Demo</a>
+    <a class="nav-brand" href="{{ url_for('index') }}"><svg class="nav-logo" viewBox="0 0 360 265.37" height="20" fill="currentColor" aria-hidden="true" focusable="false"><path d="M277.5,95.01s0,.03,0,.05c-4.31-.14-8.63.05-12.92.56.42-3.41.63-6.88.63-10.4C265.21,38.15,227.06,0,180,0s-85.21,38.15-85.21,85.21c0,3.52.22,6.98.63,10.39-4.29-.5-8.61-.68-12.92-.53,0-.02,0-.04,0-.05C36.69,96.44,0,134.01,0,180.17s38.15,85.21,85.21,85.21c22.47,0,42.63-7.7,58.13-22.91l.04.04,36.93-36.93c.19.19.38.38.56.56,10.61,10.61,20.99,21.45,31.76,31.88,17.34,16.81,37.62,27.36,62.17,27.36,47.06,0,85.21-38.15,85.21-85.21s-36.69-83.73-82.5-85.16ZM180,35.5c27.45,0,49.7,22.25,49.7,49.7,0,12.97-4.97,24.77-13.1,33.62l-36.27,37.16-36.75-36.96c-8.25-8.87-13.29-20.76-13.29-33.83,0-27.45,22.25-49.7,49.7-49.7ZM120.57,215.8c-10.17,8.31-22.02,14.07-35.37,14.07-27.45,0-49.7-22.25-49.7-49.7,0-20.68,12.63-38.41,30.61-45.9.22,0,.43-.04.63-.12,19.44-7.88,39.87-2.39,54.4,12.05,11.61,11.53,23.14,23.15,34.68,34.77-3.85,4.53-32.92,32.94-35.25,34.83ZM274.79,229.87c-12.38,0-23.68-4.01-32.38-11.5-.07-.06-.55-.51-.55-.51l-36.83-37.03c2.18-2.2,34.82-35.11,41.35-41.48,13.93-9.67,31.7-11.41,47.01-5.2.15.06.31.09.47.11,17.99,7.48,30.63,25.22,30.63,45.91,0,27.45-22.25,49.7-49.7,49.7Z"/></svg><span>EDB</span> Refdata Demo</a>
     <a class="nav-github" href="https://github.com/EnterpriseDB/dc-demo-refdata" target="_blank" rel="noopener">
       <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
         <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38

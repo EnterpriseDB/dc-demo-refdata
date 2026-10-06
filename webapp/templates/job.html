@@ -1,27 +1,38 @@
 {% extends "base.html" %}
 {% block title %}{{ job.title }} &mdash; Refdata Demo{% endblock %}
+{% from "_icons.html" import icon %}
 {% block content %}
-<h1>{{ job.title }}</h1>
-<p class="subtitle">
-  bulk-mb={{ job.params.bulk_mb }} &middot; workers={{ job.params.workers }}
-  &middot; batch-size={{ job.params.batch_size }} &middot; batches-per-worker={{ job.params.batches_per_worker }}
-</p>
 
 <div class="card">
+  <h1 class="with-icon">{{ icon(usecase_icon, 30) }}{{ job.title }}</h1>
   <div class="status-row">
     <span id="spinner" class="spinner"></span>
     <span id="stageText" class="stage-text">Starting&hellip;</span>
+    <span id="progressCaption" class="load-meta"></span>
     <span id="elapsed" class="elapsed"></span>
   </div>
   <div class="progress-track" id="progressTrack" hidden>
     <div class="progress-fill" id="progressFill"></div>
   </div>
-  <p class="chart-caption" id="progressCaption"></p>
+  <ul class="run-params" aria-label="Settings used for this run">
+    {% for label, value in [('Bulk data', job.params.bulk_mb ~ ' MB'), ('Workers', job.params.workers),
+                            ('Rows / batch', job.params.batch_size), ('Batches / worker', job.params.batches_per_worker)] %}
+    <li><span class="check" aria-hidden="true"></span><span class="param-label">{{ label }}</span><strong>{{ value }}</strong></li>
+    {% endfor %}
+</ul>
 </div>
 
 <div class="card" id="advisorCard" hidden>
-  <h2>Workflow <code>refdata</code> recommendation: <span id="advisorPill"></span></h2>
-  <p>Based on the access pattern observed during the heap-phase benchmark above.</p>
+  <h2 class="with-icon">{{ icon('lightbulb', 22) }}Recommendation</h2>
+  <div class="verdict" id="verdict">
+    <span class="verdict-icon v-yes">{{ icon('circle-check', 30) }}</span>
+    <span class="verdict-icon v-neutral">{{ icon('circle-minus', 30) }}</span>
+    <span class="verdict-icon v-no">{{ icon('circle-alert', 30) }}</span>
+    <div>
+      <strong class="verdict-label" id="advisorPill"></strong>
+      <span class="verdict-reason" id="verdictReason"></span>
+    </div>
+  </div>
   <div class="advisor-stats">
     <div class="advisor-stat">Rows<strong id="advRows"></strong></div>
     <div class="advisor-stat">Self DML<strong id="advSelfDml"></strong></div>
@@ -48,41 +59,99 @@
 </div>
 
 <div class="card" id="resultsCard" hidden>
-  <h2>Results</h2>
+  <h2 class="with-icon">{{ icon('chart-column', 22) }}Results</h2>
   <div class="chart-grid">
-    <div>
-      <canvas id="throughputChart" height="220"></canvas>
-      <p class="chart-caption" id="throughputCaption"></p>
+    <div class="chart-panel">
+      <div class="chart-box tall"><canvas id="throughputChart"></canvas></div>
+      <p class="note">{{ icon('info', 15) }}<span id="throughputCaption"></span></p>
     </div>
-    <div>
-      <canvas id="contentionChart" height="220"></canvas>
-      <p class="chart-caption" id="contentionCaption"></p>
+    <div class="chart-panel">
+      <div class="chart-box tall"><canvas id="contentionChart"></canvas></div>
+      <p class="note">{{ icon('info', 15) }}<span id="contentionCaption"></span></p>
     </div>
   </div>
-  <div class="timeline-chart">
-    <canvas id="mxTimelineChart" height="140"></canvas>
-    <p class="chart-caption" id="mxTimelineCaption"></p>
+  <div class="timeline-chart chart-panel">
+    <div class="chart-box"><canvas id="mxTimelineChart"></canvas></div>
+    <p class="note">{{ icon('info', 15) }}<span id="mxTimelineCaption"></span></p>
   </div>
 </div>
 
 <div class="card">
-  <h2>Console output</h2>
+  <h2 class="with-icon">{{ icon('terminal', 22) }}Console output</h2>
   <pre class="console" id="console">{% for line in job.lines %}{% if not (line.startswith('RESULT_JSON:') or line.startswith('ADVISOR_JSON:') or line.startswith('PROGRESS_JSON:')) %}{{ line }}
 {% endif %}{% endfor %}</pre>
 </div>
 
-<a class="button-link" href="{{ url_for('index') }}">&larr; Back</a>
+<a class="button-link secondary" href="{{ url_for('index') }}">{{ icon('arrow-left') }}Back</a>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"
         integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
         crossorigin="anonymous"></script>
 <script>
+// Warm chart theme to match the surface. heap = neutral, refdata = accent.
+const HEAP = '#a39d92', REFDATA = '#c4501e';
+Chart.defaults.color = '#625e56';
+Chart.defaults.borderColor = 'rgba(200, 195, 185, .6)';
+Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+Chart.defaults.plugins.title.color = '#34322d';
+Chart.defaults.plugins.title.font = { weight: '600', size: 13 };
+Chart.defaults.maintainAspectRatio = false;
+Chart.defaults.elements.bar.borderRadius = 8;
+
+// Tiny highlighter: tokenise raw text, escape each piece, wrap in a span.
+const esc = t => t.replace(/[&<>]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;'}[c]));
+const span = (cls, t) => `<span class="tok-${cls}">${esc(t)}</span>`;
+const SQL_KW = /\b(ALTER|TABLE|SET|ACCESS|METHOD|CREATE|EXTENSION|SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|DELETE)\b/;
+
+function highlightSQL(text) {
+  return text.split(/(\b[A-Za-z_]+\b(?:\.[A-Za-z_]\w*)*)/).map(part => {
+    if (SQL_KW.test(part) && part === part.toUpperCase()) return span('kw', part);
+    if (/^(refdata|heap)$/.test(part)) return span(part, part);
+    if (/\./.test(part)) return span('id', part);
+    return esc(part);
+  }).join('');
+}
+
+const LINE_TOKENS = new RegExp([
+  '(?<delta>[+-]\\d+(?:\\.\\d+)?%)',
+  '(?<code>`[^`]+`)',
+  '(?<warn>\\((?:critical|high)\\))',
+  '(?<am>\\b(?:refdata|heap)\\b)',
+  '(?<id>\\bpublic\\.\\w+)',
+  '(?<num>\\b\\d[\\d,]*(?:\\.\\d+)?(?:%|s|MB)?(?:/\\d+)?\\b%?)',
+].join('|'), 'g');
+
+function highlightLine(line) {
+  if (/^==.*==$/.test(line)) return span('head', line);
+  if (/^-{5,}$/.test(line)) return span('dim', line);
+  if (/^\s*ALTER TABLE/.test(line)) return highlightSQL(line);
+  let out = '', rest = line;
+  const key = rest.match(/^(\s+[A-Za-z][\w ]*:)(\s)/);
+  if (key) { out += span('key', key[1]); rest = rest.slice(key[1].length); }
+  let last = 0;
+  for (const m of rest.matchAll(LINE_TOKENS)) {
+    out += esc(rest.slice(last, m.index));
+    const [cls] = Object.entries(m.groups).find(([, v]) => v);
+    out += cls === 'am' ? span(m[0], m[0]) : span(cls, m[0]);
+    last = m.index + m[0].length;
+  }
+  return out + esc(rest.slice(last));
+}
+
+function appendConsole(line) {
+  consoleEl.insertAdjacentHTML('beforeend', highlightLine(line) + '\n');
+}
+
 const jobId = {{ job.id | tojson }};
 const consoleEl = document.getElementById('console');
 const spinnerEl = document.getElementById('spinner');
 const stageEl = document.getElementById('stageText');
 const elapsedEl = document.getElementById('elapsed');
-let seen = {{ job.lines | length }};
+// Replay every line through poll() so a reopened finished job still gets
+// its advisor card, charts, and highlighted console (server copy is a no-JS fallback).
+let seen = 0;
+consoleEl.innerHTML = '';
+// Server owns run time; we tick locally between polls and freeze on done.
 let startedAt = Date.now();
 
 const progressTrackEl = document.getElementById('progressTrack');
@@ -100,8 +169,9 @@ function humanSize(bytes) {
 function updateProgress(p) {
   progressTrackEl.hidden = false;
   progressFillEl.style.width = `${p.pct}%`;
-  progressCaptionEl.textContent =
-    `${p.rows.toLocaleString()} rows loaded — ${humanSize(p.size)} / ${humanSize(p.target)} (${p.pct.toFixed(1)}%)`;
+  // Compact: the bar shows %, the Bulk data tile shows the target.
+  const rows = p.rows.toLocaleString(undefined, {notation: 'compact', maximumFractionDigits: 1});
+  progressCaptionEl.textContent = `${rows} rows · ${humanSize(p.size)}`;
 }
 
 const STAGES = [
@@ -133,14 +203,19 @@ function tickElapsed() {
   const secs = Math.floor((Date.now() - startedAt) / 1000);
   elapsedEl.textContent = `${secs}s`;
 }
-setInterval(tickElapsed, 1000);
+const elapsedTimer = setInterval(tickElapsed, 1000);
 tickElapsed();
 
 function renderAdvisor(rec) {
   document.getElementById('advisorCard').hidden = false;
   const pill = document.getElementById('advisorPill');
-  pill.textContent = rec.recommendation.replace(/_/g, ' ');
-  pill.className = 'rec-pill rec-' + rec.recommendation;
+  // Verdict banner: the card's conclusion, colored and iconed by recommendation.
+  const label = rec.recommendation.replace(/_/g, ' ');
+  pill.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+  document.getElementById('verdict').className = 'verdict rec-' + rec.recommendation;
+  document.getElementById('verdictReason').textContent =
+    `Benefit ratio ${rec.benefit_ratio.toLocaleString(undefined, {maximumFractionDigits: 1})}` +
+    ` · ${rec.mxid_pressure} MultiXact pressure`;
 
   document.getElementById('advRows').textContent = rec.rows.toLocaleString();
   document.getElementById('advSelfDml').textContent = rec.self_dml.toLocaleString();
@@ -149,15 +224,17 @@ function renderAdvisor(rec) {
   document.getElementById('advScore').textContent = rec.score.toLocaleString(undefined, {maximumFractionDigits: 1});
 
   const mxidEl = document.getElementById('advMxid');
-  mxidEl.innerHTML = '';
-  const mxidPill = document.createElement('span');
-  mxidPill.className = 'mx-pill mx-' + rec.mxid_pressure;
-  mxidPill.textContent = `${rec.mxid_pct.toFixed(1)}% (${rec.mxid_pressure})`;
-  mxidEl.appendChild(mxidPill);
+  // Same big numeral as the other tiles, colored by pressure level, with the level as a small suffix.
+  mxidEl.className = 'mx-' + rec.mxid_pressure;
+  mxidEl.textContent = `${rec.mxid_pct.toFixed(1)}%`;
+  const level = document.createElement('span');
+  level.className = 'stat-suffix';
+  level.textContent = rec.mxid_pressure;
+  mxidEl.appendChild(level);
 
   const alterEl = document.getElementById('advAlter');
   if (rec.alter_statement) {
-    alterEl.textContent = rec.alter_statement;
+    alterEl.innerHTML = highlightSQL(rec.alter_statement);
     alterEl.hidden = false;
   }
 }
@@ -174,7 +251,7 @@ function renderCharts(summary) {
       datasets: [{
         label: 'rows/sec',
         data: [Math.round(heap.rows_per_second), Math.round(refdata.rows_per_second)],
-        backgroundColor: ['#dc2626', '#16a34a'],
+        backgroundColor: [HEAP, REFDATA],
       }],
     },
     options: {
@@ -192,8 +269,8 @@ function renderCharts(summary) {
     data: {
       labels: [`Lookup rows w/ a live MultiXact (of ${heap.dim_row_count})`, 'Max concurrent lock-holders on one row'],
       datasets: [
-        { label: 'heap', data: [heap.rows_with_multixact, heap.max_concurrent_holders_on_one_row], backgroundColor: '#dc2626' },
-        { label: 'refdata', data: [refdata.rows_with_multixact, refdata.max_concurrent_holders_on_one_row], backgroundColor: '#16a34a' },
+        { label: 'heap', data: [heap.rows_with_multixact, heap.max_concurrent_holders_on_one_row], backgroundColor: HEAP },
+        { label: 'refdata', data: [refdata.rows_with_multixact, refdata.max_concurrent_holders_on_one_row], backgroundColor: REFDATA },
       ],
     },
     options: {
@@ -212,13 +289,13 @@ function renderCharts(summary) {
         {
           label: 'heap',
           data: heap.timeline.map(p => ({x: p.t, y: p.rows_with_multixact})),
-          borderColor: '#dc2626', backgroundColor: '#dc2626',
+          borderColor: HEAP, backgroundColor: HEAP,
           stepped: true, pointRadius: 0, borderWidth: 2,
         },
         {
           label: 'refdata',
           data: refdata.timeline.map(p => ({x: p.t, y: p.rows_with_multixact})),
-          borderColor: '#16a34a', backgroundColor: '#16a34a',
+          borderColor: REFDATA, backgroundColor: REFDATA,
           stepped: true, pointRadius: 0, borderWidth: 2,
         },
       ],
@@ -241,6 +318,7 @@ function renderCharts(summary) {
 async function poll() {
   const res = await fetch(`/job/${jobId}/output`);
   const data = await res.json();
+  startedAt = Date.now() - data.elapsed * 1000;
   if (data.lines.length > seen) {
     const newLines = data.lines.slice(seen);
     updateStage(newLines);
@@ -252,16 +330,20 @@ async function poll() {
       } else if (line.startsWith('PROGRESS_JSON:')) {
         updateProgress(JSON.parse(line.slice('PROGRESS_JSON:'.length)));
       } else {
+        // Load finished: keep the bar, fill it, and turn it green.
         if (line.includes('table+indexes now') && !progressTrackEl.hidden) {
-          progressTrackEl.hidden = true;
+          progressFillEl.style.width = '100%';
+          progressFillEl.classList.add('complete');
         }
-        consoleEl.textContent += line + '\n';
+        appendConsole(line);
       }
     }
     consoleEl.scrollTop = consoleEl.scrollHeight;
     seen = data.lines.length;
   }
   if (data.done) {
+    clearInterval(elapsedTimer);
+    tickElapsed();
     spinnerEl.className = data.returncode === 0 ? 'spinner done' : 'spinner failed';
     stageEl.textContent = data.returncode === 0 ? 'Complete' : `Failed (exit ${data.returncode})`;
   } else {
